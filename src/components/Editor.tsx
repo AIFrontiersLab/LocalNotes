@@ -123,19 +123,39 @@ function isPdfPath(path: string): boolean {
 
 function ImageThumbnail({ path }: { path: string }) {
   const [src, setSrc] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   useEffect(() => {
     let cancelled = false;
+    setLoadFailed(false);
     resolveImagePath(path)
       .then((p) => {
         if (!cancelled) setSrc(convertFileSrc(p));
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      });
     return () => {
       cancelled = true;
     };
   }, [path]);
-  if (!src) return <span className="text-2xl" title="Image">🖼</span>;
-  return <img src={src} alt="" className="w-full h-full object-cover" />;
+  const showPlaceholder = !src || loadFailed;
+  if (showPlaceholder) {
+    return (
+      <span className="flex w-full h-full items-center justify-center bg-stone-200 dark:bg-stone-600 text-stone-500 dark:text-stone-400" title="Image">
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      className="w-full h-full object-cover"
+      onError={() => setLoadFailed(true)}
+    />
+  );
 }
 
 /** Split body by search phrase (case-insensitive) and wrap matches in <mark>. */
