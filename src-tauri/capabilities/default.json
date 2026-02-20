@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "Default capabilities for Local Notes",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$APPDATA/../LocalPrivateNotes/**" },
+        { "path": "$HOME/Library/Application Support/LocalPrivateNotes/**" }
+      ]
+    }
+  ]
+}
