@@ -12,6 +12,8 @@ The app uses a **three-panel layout** with a light, minimal theme.
 
 ### Main window
 
+![Local Notes main window](assets/main-ui.png)
+
 - **Header** — Window title “Local Notes”, **View** menu, calendar (e.g. today’s date), and **New** button with dropdown for creating notes (including from templates).
 - **Left sidebar**
   - **Search** — “Search in content…” for full-text search across notes.
@@ -25,6 +27,8 @@ The app uses a **three-panel layout** with a light, minimal theme.
 - **Right panel** — Note details; shows “Select a note to see details” until a note is selected.
 
 ### Custom templates modal
+
+![Custom templates modal](assets/custom-templates-modal.png)
 
 Opened from **New ▾ → Manage templates…** (or equivalent). Used to define and manage reusable note templates.
 
