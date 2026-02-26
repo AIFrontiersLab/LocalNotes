@@ -10,6 +10,7 @@ import {
   saveNote,
   toggleImportant,
   attachImages,
+  attachImageFromClipboard,
   deleteNote,
   resolveImagePath,
   removeAttachment,
@@ -324,6 +325,70 @@ export function Editor({
       }
     }
   };
+
+  const blobToBase64 = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.indexOf(",") >= 0 ? dataUrl.slice(dataUrl.indexOf(",") + 1) : dataUrl;
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+  const handlePasteFromClipboard = useCallback(async () => {
+    if (!noteId) return;
+    try {
+      const items = await navigator.clipboard.read();
+      let attachedImage = false;
+      let clipboardText: string | null = null;
+      for (const item of items) {
+        if (item.types.includes("image/png")) {
+          const blob = await item.getType("image/png");
+          const base64 = await blobToBase64(blob);
+          const meta = await attachImageFromClipboard(noteId, base64, "paste.png");
+          setContent((c) => (c ? { ...c, meta } : null));
+          onSaved();
+          attachedImage = true;
+        } else if (item.types.includes("image/jpeg")) {
+          const blob = await item.getType("image/jpeg");
+          const base64 = await blobToBase64(blob);
+          const meta = await attachImageFromClipboard(noteId, base64, "paste.jpg");
+          setContent((c) => (c ? { ...c, meta } : null));
+          onSaved();
+          attachedImage = true;
+        } else if (item.types.includes("image/webp")) {
+          const blob = await item.getType("image/webp");
+          const base64 = await blobToBase64(blob);
+          const meta = await attachImageFromClipboard(noteId, base64, "paste.webp");
+          setContent((c) => (c ? { ...c, meta } : null));
+          onSaved();
+          attachedImage = true;
+        } else if (item.types.includes("text/plain") && clipboardText === null) {
+          clipboardText = await item.getType("text/plain").then((b) => b.text());
+        }
+      }
+      if (!attachedImage && clipboardText && bodyRef.current) {
+        const ta = bodyRef.current;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const before = body.slice(0, start);
+        const after = body.slice(end);
+        const newBody = before + clipboardText + after;
+        setBody(newBody);
+        onBodyChange?.(newBody);
+        requestAnimationFrame(() => {
+          const newPos = start + clipboardText!.length;
+          ta.setSelectionRange(newPos, newPos);
+          ta.focus();
+        });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [noteId, body, onSaved, onBodyChange]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -642,6 +707,14 @@ export function Editor({
             </button>
             <button
               type="button"
+              onClick={handlePasteFromClipboard}
+              title="Paste image or text from clipboard"
+              className="p-1.5 rounded border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"
+            >
+              Paste
+            </button>
+            <button
+              type="button"
               onClick={handleDelete}
               className="p-1.5 rounded border border-stone-200 text-stone-600 hover:bg-stone-50 hover:text-red-600 hover:border-red-200 text-sm"
             >
@@ -937,6 +1010,40 @@ export function Editor({
               ref={bodyRef}
               value={body}
               onChange={(e) => setBody(e.target.value)}
+              onPaste={async (e) => {
+                if (!noteId) return;
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                for (const item of items) {
+                  if (item.type.startsWith("image/")) {
+                    e.preventDefault();
+                    const blob = item.getAsFile();
+                    if (!blob) continue;
+                    const base64 = await blobToBase64(blob);
+                    const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+                    try {
+                      const meta = await attachImageFromClipboard(noteId, base64, `paste.${ext}`);
+                      setContent((c) => (c ? { ...c, meta } : null));
+                      onSaved();
+                      const ta = bodyRef.current;
+                      if (ta) {
+                        const start = ta.selectionStart;
+                        const before = body.slice(0, start);
+                        const after = body.slice(start);
+                        setBody(before + "\n[Image pasted]\n" + after);
+                        onBodyChange?.(before + "\n[Image pasted]\n" + after);
+                        requestAnimationFrame(() => {
+                          const newPos = start + "\n[Image pasted]\n".length;
+                          ta.setSelectionRange(newPos, newPos);
+                        });
+                      }
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : String(err));
+                    }
+                    return;
+                  }
+                }
+              }}
               placeholder="Write your note… Use #tag and [[Note Title]] for links. Use the toolbar for bold, headings, lists, code."
               className="flex-1 min-h-[120px] w-full p-3 border-0 rounded focus:outline-none resize-none font-mono text-sm"
             />

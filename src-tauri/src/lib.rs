@@ -14,6 +14,7 @@ pub fn run() {
             commands::save_note,
             commands::toggle_important,
             commands::attach_images,
+            commands::attach_image_from_clipboard,
             commands::delete_note,
             commands::resolve_image_path,
             commands::update_note_title,

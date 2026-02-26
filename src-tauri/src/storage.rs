@@ -2,11 +2,14 @@ use crate::models::{ImageRef, IndexFile, NoteMeta, NoteTemplate, Notebook, NoteV
 use chrono::Utc;
 use serde_json;
 use std::collections::HashSet;
+use std::env;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 use uuid::Uuid;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 
 /// Extract #tag tokens from text (alphanumeric + underscore after #).
 fn extract_tags_from_body(body: &str) -> Vec<String> {
@@ -394,6 +397,83 @@ pub fn attach_images(
     let meta = note.clone();
     write_index(&root, &index)?;
     Ok(meta)
+}
+
+/// Attach a single image from clipboard (base64-encoded bytes) to a note.
+pub fn attach_image_from_clipboard(
+    app_handle: &tauri::AppHandle,
+    note_id: &str,
+    base64_data: &str,
+    suggested_name: &str,
+) -> Result<NoteMeta, String> {
+    validate_note_id(note_id)?;
+    let data = BASE64
+        .decode(base64_data.trim())
+        .map_err(|e| format!("Invalid base64 image: {}", e))?;
+    if data.is_empty() {
+        return Err("Image data is empty".into());
+    }
+    let root = storage_root(app_handle)?;
+    let img_dir = images_dir(&root, note_id);
+    fs::create_dir_all(&img_dir).map_err(|e| e.to_string())?;
+
+    let path = Path::new(suggested_name);
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("paste");
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .filter(|e| !e.is_empty())
+        .unwrap_or("png");
+    let safe_stem = sanitize_filename(stem);
+    let stored_name = format!(
+        "{}-{}.{}",
+        chrono::Utc::now().timestamp_millis(),
+        safe_stem,
+        ext.to_lowercase()
+    );
+    let dest = img_dir.join(&stored_name);
+    fs::write(&dest, &data).map_err(|e| e.to_string())?;
+    // Also save a copy to the default user Images folder (~/Images)
+    if let Some(default_dir) = default_images_folder() {
+        let _ = fs::create_dir_all(&default_dir);
+        let timestamp = Utc::now().format("%Y-%m-%d-%H%M%S");
+        let default_name = format!("paste-{}.{}", timestamp, ext.to_lowercase());
+        let default_path = default_dir.join(&default_name);
+        let _ = fs::write(&default_path, &data);
+    }
+    let size = data.len() as u64;
+    let relative_path = format!("images/{}/{}", note_id, stored_name);
+    let display_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("paste")
+        .to_string();
+
+    let mut index = read_index(&root)?;
+    let note = index
+        .notes
+        .iter_mut()
+        .find(|n| n.id == note_id)
+        .ok_or("Note not found")?;
+    let added_at = Utc::now().to_rfc3339();
+    note.images.push(ImageRef {
+        name: display_name,
+        path: relative_path,
+        added_at,
+        size: Some(size),
+    });
+    note.updated_at = Utc::now().to_rfc3339();
+    let meta = note.clone();
+    write_index(&root, &index)?;
+    Ok(meta)
+}
+
+/// Default folder for saving clipboard-pasted images: ~/Images (or $USERPROFILE/Images on Windows).
+fn default_images_folder() -> Option<PathBuf> {
+    let home = env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
+        .map(PathBuf::from)?;
+    Some(home.join("Images"))
 }
 
 /// Delete a note: remove from index, delete .txt, image folder, and versions.

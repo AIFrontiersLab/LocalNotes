@@ -45,6 +45,16 @@ pub fn attach_images(
 }
 
 #[tauri::command]
+pub fn attach_image_from_clipboard(
+    app: tauri::AppHandle,
+    note_id: String,
+    base64_data: String,
+    suggested_name: String,
+) -> Result<crate::models::NoteMeta, String> {
+    storage::attach_image_from_clipboard(&app, &note_id, &base64_data, &suggested_name)
+}
+
+#[tauri::command]
 pub fn delete_note(app: tauri::AppHandle, note_id: String) -> Result<(), String> {
     storage::delete_note(&app, &note_id)
 }

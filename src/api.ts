@@ -39,6 +39,18 @@ export async function attachImages(
   return invoke("attach_images", { noteId, filePaths });
 }
 
+export async function attachImageFromClipboard(
+  noteId: string,
+  base64Data: string,
+  suggestedName: string
+): Promise<NoteMeta> {
+  return invoke("attach_image_from_clipboard", {
+    noteId,
+    base64Data,
+    suggestedName,
+  });
+}
+
 export async function deleteNote(noteId: string): Promise<void> {
   return invoke("delete_note", { noteId });
 }
